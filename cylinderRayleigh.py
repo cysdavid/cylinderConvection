@@ -149,10 +149,26 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
             
     for m in range(1,M+1):
         fRetro = lambda ξ : ξRetroFunc(ξ,m,γ)
-        ξRetro[m-1,:] = fsolve(fRetro,ξRetroGuesses[m-1,:K])
+        fsolveResultsRetro = fsolve(fRetro,ξRetroGuesses[m-1,:])
         
+        # Eliminate repeated retrograde roots 
+        # Roots closer than 1% of the average distance between roots count as repeated
+        
+        ΔξRetro = np.mean(np.diff(fsolveResultsRetro))/np.mean(fsolveResultsRetro)
+        decRetro = abs(int(np.log10(0.01*ΔξRetro)))
+        _,retroUniqInds = np.unique(np.round(fsolveResultsRetro,decRetro),return_index=True)
+        ξRetro[m-1,:] = fsolveResultsRetro[retroUniqInds][:K]
+
         fPro = lambda ξ : ξProFunc(ξ,m,γ)
-        ξPro[m-1,:] =fsolve(fPro,ξProGuesses[m-1,:K])
+        fsolveResultsPro = fsolve(fPro,ξProGuesses[m-1,:])
+        
+        # Eliminate repeated prograde roots 
+        # Roots closer than 1% of the average distance between roots count as repeated
+        
+        ΔξPro = np.mean(np.diff(fsolveResultsPro))/np.mean(fsolveResultsPro) 
+        decPro = abs(int(np.log10(0.01*ΔξPro)))
+        _,ProUniqInds = np.unique(np.round(fsolveResultsPro,decPro),return_index=True)
+        ξPro[m-1,:] = fsolveResultsPro[ProUniqInds][:K]
         
     warningCond = np.sum(np.abs(ξPro[:M,:K-1]-ξProGuesses[:M,:K-1]) > np.abs(np.diff(ξProGuesses[:M,:K],axis=1)))!=0
 
