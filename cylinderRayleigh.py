@@ -17,12 +17,12 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
     ----------
     Γ : float
         Cylindrical tank aspect ratio.
-        Ratio of tank radius to height
-        (Γ = s0/d)
+        Ratio of tank diameter to height
+        (Γ = D/H)
     Ek : float
         Ekman number.
         Ratio of viscous to Coriolis forces on the container scale
-        (Ek = ν/(Ω d^2))
+        (Ek = ν/(Ω H^2))
     Pr : float
         Prandtl number.
         Ratio of viscosity to thermal diffusivity
@@ -50,7 +50,7 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
     R1c : float
         Minimum modified Rayleigh number among the first M x K bulk modes.
         Defined as the Rayleigh number scaled by the Ekman number.
-        (R = Ra Ek = α ΔT g d/(Ω κ))
+        (R = Ra Ek = α ΔT g H/(Ω κ))
     σ1c : float
         Dimensionless half-frequency of the bulk mode with R = R1c,
         scaled by the rotation rate, Ω.
@@ -74,8 +74,9 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
         m  - azimuthal wavenumber
         n  - vertical wavenumber
         k  - radial wavenumber
-        s0 - tank radius
-        d  - tank height
+        R  - tank radius
+        D  - tank diameter
+        H  - tank height
         ν  - fluid viscosity
         Ω  - rotation rate
         κ  - thermal diffusivity
@@ -88,8 +89,8 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
 
     Applying the eigenvalue condition (equation 4.10 in Zhang & Liao, 2009) on radial 
     wavenumber ξ requires numerical root-finding. This program uses pre-computed 
-    roots of (4.10) with  Γ = 1, M = 100, K = 100 as starting guesses for finding 
-    roots with Γ != 1. The starting guesses are stored in the files 'xiRetroGuesses.csv'
+    roots of (4.10) with  Γ = 2, M = 100, K = 100 as starting guesses for finding 
+    roots with Γ != 2. The starting guesses are stored in the files 'xiRetroGuesses.csv'
     and 'xiProGuesses.csv'
 
     References
@@ -102,6 +103,8 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
         Inertial Waves and Precession (Cambridge Monographs on Mechanics). Cambridge: 
         Cambridge University Press. doi:10.1017/9781139024853
     '''
+    # Convert Γ = D/H to γ = r/H
+    γ = Γ/2
 
     # Find the jth smallest positive root $\beta_{m1j}$ of $J_m'(\beta) = 0$ for each $m$, $1\le m \le M$.
 
@@ -112,26 +115,26 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
     del m
     del k
 
-    # Solve transcendental equation for $\xi$ using the roots for the Γ = 1 case as starting points:
+    # Solve transcendental equation for $\xi$ using the roots for the γ = 1 case as starting points:
 
     ξRetroGuesses = np.loadtxt('xiRetroGuesses.csv',delimiter=',')[:M,:K]
     ξProGuesses = np.loadtxt('xiProGuesses.csv',delimiter=',')[:M,:K]
 
-    def ξRetroFunc(ξ,m,Γ):
+    def ξRetroFunc(ξ,m,γ):
         ξEqnp = ξ*sp.jv(-1 + m,ξ) + m*(-1 + np.sqrt(1 +
-                ξ**2/(np.pi**2*Γ**2)))*sp.jv(m,ξ)
+                ξ**2/(np.pi**2*γ**2)))*sp.jv(m,ξ)
         return ξEqnp
 
-    def ξProFunc(ξ,m,Γ):
+    def ξProFunc(ξ,m,γ):
         ξEqnp = ξ*sp.jv(-1 + m,ξ) + m*(-1 - np.sqrt(1 +
-                ξ**2/(np.pi**2*Γ**2)))*sp.jv(m,ξ)
+                ξ**2/(np.pi**2*γ**2)))*sp.jv(m,ξ)
         
         return ξEqnp
 
     ξRetro = np.zeros((M,K))
     ξPro = np.zeros((M,K))
 
-    if Γ < 0.2:
+    if γ < 0.2:
         import copy
         
         ξRetroGuesses0 = copy.deepcopy(ξRetroGuesses)
@@ -145,10 +148,10 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
             ξProGuesses[m-1,:] =fsolve(fPro,ξProGuesses0[m-1,:])
             
     for m in range(1,M+1):
-        fRetro = lambda ξ : ξRetroFunc(ξ,m,Γ)
+        fRetro = lambda ξ : ξRetroFunc(ξ,m,γ)
         ξRetro[m-1,:] = fsolve(fRetro,ξRetroGuesses[m-1,:K])
         
-        fPro = lambda ξ : ξProFunc(ξ,m,Γ)
+        fPro = lambda ξ : ξProFunc(ξ,m,γ)
         ξPro[m-1,:] =fsolve(fPro,ξProGuesses[m-1,:K])
         
     warningCond = np.sum(np.abs(ξPro[:M,:K-1]-ξProGuesses[:M,:K-1]) > np.abs(np.diff(ξProGuesses[:M,:K],axis=1)))!=0
@@ -158,8 +161,8 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
         
     # Use the dispersion relation to compute the corresponding inviscid half-frequencies $\sigma_0$
 
-    σ0Retro = (1 + (ξRetro/(Γ*np.pi))**2)**(-1/2)
-    σ0Pro = -(1 + (ξPro/(Γ*np.pi))**2)**(-1/2)
+    σ0Retro = (1 + (ξRetro/(γ*np.pi))**2)**(-1/2)
+    σ0Pro = -(1 + (ξPro/(γ*np.pi))**2)**(-1/2)
 
     ξ = np.stack((ξRetro,ξPro))
     σ0 = np.stack((σ0Retro,σ0Pro))
@@ -173,16 +176,16 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
     Sum2 = np.zeros((2,M,K))
 
     for j in range(1,J+1):
-        Q = (np.pi**2*Γ**2*β[...,j-1]**2)/(2*(-mArr**2 + β[...,j-1]**2)*(-β[...,j-1]**2+ ξ**2)**2*σ0**2)
-        Sum += (Q*(np.pi**2 + β[...,j-1]**2/Γ**2))/((4*Pr**2*σ0**2)/Ek**2 + (np.pi**2 + β[...,j-1]**2/Γ**2)**2)
-        Sum2 += Q/((np.pi**2 + β[...,j-1]**2/Γ**2)**2 + (4*Pr**2*σ0**2)/Ek**2)
+        Q = (np.pi**2*γ**2*β[...,j-1]**2)/(2*(-mArr**2 + β[...,j-1]**2)*(-β[...,j-1]**2+ ξ**2)**2*σ0**2)
+        Sum += (Q*(np.pi**2 + β[...,j-1]**2/γ**2))/((4*Pr**2*σ0**2)/Ek**2 + (np.pi**2 + β[...,j-1]**2/γ**2)**2)
+        Sum2 += Q/((np.pi**2 + β[...,j-1]**2/γ**2)**2 + (4*Pr**2*σ0**2)/Ek**2)
 
     with np.errstate(divide='ignore'):
-        R1 = (np.sqrt(Ek)*((np.sqrt(Ek)*np.pi**2*(np.pi**2*Γ**2 
+        R1 = (np.sqrt(Ek)*((np.sqrt(Ek)*np.pi**2*(np.pi**2*γ**2 
             + mArr*(mArr - σ0)))/(σ0**2*np.sqrt(1 - σ0**2)) 
             - 2*mArr*σ0*(np.sqrt(1 - σ0) + np.sqrt(1 + σ0)) 
-            + (mArr**2 + np.pi**2*Γ**2)*((1 - σ0)**1.5 + (1 + σ0)**1.5 
-            + (np.sqrt(1 - σ0**2)*np.sqrt(np.abs(σ0)))/Γ)))/(4.*mArr**2*Sum*np.sqrt(1 - σ0**2))
+            + (mArr**2 + np.pi**2*γ**2)*((1 - σ0)**1.5 + (1 + σ0)**1.5 
+            + (np.sqrt(1 - σ0**2)*np.sqrt(np.abs(σ0)))/γ)))/(4.*mArr**2*Sum*np.sqrt(1 - σ0**2))
 
     # Compute minimum R1 and corresponding inviscid half-frequency and wavenumbers.
 
@@ -195,18 +198,18 @@ def cylRayleigh(Γ, Ek, Pr, M=50, K=50, J=25, printVals=True):
 
     # Compute the corresponding viscously-corrected half-frequency
 
-    σ1c = 0.5*(2*σ0c - 1/(np.pi**2*Γ**2 + m0c*(m0c - σ0c))*(np.sqrt(1
+    σ1c = 0.5*(2*σ0c - 1/(np.pi**2*γ**2 + m0c*(m0c - σ0c))*(np.sqrt(1
             - σ0c**2)*np.sqrt(Ek))*(Sum2[c0ind]*(8*m0c**2*R1c*Pr*σ0c*np.sqrt(1 -
             σ0c**2))/Ek**1.5 + 2*σ0c*m0c*(np.sqrt(1 + σ0c) - np.sqrt(1 -
-            σ0c)) + (m0c**2 + np.pi**2*Γ**2)*((σ0c*np.sqrt(1 -
-            σ0c**2))/(Γ*np.sqrt(np.abs(σ0c))) - (1 + σ0c)**1.5 +
+            σ0c)) + (m0c**2 + np.pi**2*γ**2)*((σ0c*np.sqrt(1 -
+            σ0c**2))/(γ*np.sqrt(np.abs(σ0c))) - (1 + σ0c)**1.5 +
             (1 - σ0c)**1.5)))
 
     # Compute critical Rayleigh number, half-frequency, and azimuthal mode number for viscous (wall) convection
 
     Rwall = 2*np.sqrt((6*(9 + 5*np.sqrt(3)))/(5 + 3*np.sqrt(3)))*np.pi**2 + 73.8*Ek**(1/3)
     σwall = (-290.6*Ek**(4/3))/Pr + (np.sqrt(2 + np.sqrt(3))*(3 + np.sqrt(3))*Ek*np.pi**2)/((1 + np.sqrt(3))*Pr)
-    mwall = Γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*Ek**(1/3))
+    mwall = γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*Ek**(1/3))
 
     if printVals==True:
          
