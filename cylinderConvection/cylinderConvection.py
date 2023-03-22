@@ -59,11 +59,11 @@ class cylConvection():
             Number of radial modes to search.
             Program will search radial modes k = 1,...,K
             Will not accept K greater than 90.
-        J : int, optional
+        J : int
             A truncation number.
             The number of passive temperature modes used to compute the 
             first-order (viscously-corrected) bulk convection solution.
-            Using J less than 25 is not recommended (critical mode may be misidentified).
+            J = O(M) = O(K) is recommended.
 
         Notes
         -----
@@ -351,9 +351,9 @@ class cylConvection():
 
         # Check that enough modes were searched
         if m0c > (self.M-1):
-            raise ValueError('Not enough azimuthal modes were searched. Increase M.')
+            raise ValueError('Not enough azimuthal modes were searched. Increase M and J.')
         if k0c > (self.K-1):
-            raise ValueError('Not enough radial modes were searched. Increase K.')
+            raise ValueError('Not enough radial modes were searched. Increase K and J.')
 
         # Compute the corresponding viscously-corrected half-frequency
 
