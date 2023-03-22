@@ -1,11 +1,10 @@
 from scipy import special as sp
 from scipy.optimize import fsolve
 import numpy as np
+import os
 import copy
-import warnings
-warnings.simplefilter('error')
 
-class cylRayleigh():
+class cylConvection():
     '''
     Class for computing the minimum normalized Rayleigh number and 
     wavenumbers of oscillatory and wall modes for rotating convection in a 
@@ -13,18 +12,37 @@ class cylRayleigh():
     top and bottom. Implements the asymptotic results of Zhang & Liao (2009) 
     (https://doi.org/10.1017/S002211200800517X).
 
-    IMPORTANT: The files 'cylinderRayleigh.py', 'xiRetroGuesses.csv', 
-    and 'xiProGuesses.csv' must all exist in the working directory.
+    IMPORTANT: The files 'cylinderConvection.py', 'xiRetroGuesses.csv', 
+    and 'xiProGuesses.csv' must exist in the following file structure
+    with respect to the working directory:
+    
+    working directory
+    │
+    ├── cylinderConvection
+    │   │
+    │   ├─── __init__.py
+    │   ├─── cylinderConvection.py
+    │   ├─── proRetroGuesses.csv
+    │   |___ xiRetroGuesses.csv
+    │
+    └── your script
     
     '''
-    
+
     # Import roots ξ for γ = 1 to use as guesses
-    ξRetroGuesses = np.loadtxt('xiRetroGuesses.csv',delimiter=',')
-    ξProGuesses = np.loadtxt('xiProGuesses.csv',delimiter=',')
+    pkgdir = 'cylinderConvection'
+    pathRetro = os.path.join(pkgdir,'xiRetroGuesses.csv')
+    pathPro = os.path.join(pkgdir,'xiProGuesses.csv')
+    
+    try:
+        ξRetroGuesses = np.loadtxt(pathRetro,delimiter=',')
+        ξProGuesses = np.loadtxt(pathPro,delimiter=',')
+    except OSError as e:
+        raise FileNotFoundError("move xiRetroGuesses.csv and xiProGuesses.csv to package directory")
 
     def __init__(self, Γ, M, K, J):
         '''
-        Initializes cylRayleigh. Computes roots ξ and β for
+        Initializes cylConvection. Computes roots ξ and β for
         specified Γ, M, K, J.
 
         Parameters
@@ -83,9 +101,9 @@ class cylRayleigh():
         '''
 
         if M > 90:
-            warnings.warn('M cannot be greater than 90.')
+            raise ValueError('M cannot be greater than 90.')
         if K > 90:
-            warnings.warn('K cannot be greater than 90.')
+            raise ValueError('K cannot be greater than 90.')
 
         self.Γ = Γ
         self.M = M
@@ -107,24 +125,24 @@ class cylRayleigh():
         self.ξRetro = np.zeros((M,K))
         self.ξPro = np.zeros((M,K))
 
-        self.ξRetroGuesses0 = copy.deepcopy(cylRayleigh.ξRetroGuesses)[:self.M,:]
-        self.ξProGuesses0 = copy.deepcopy(cylRayleigh.ξProGuesses)[:self.M,:]
+        self.ξRetroGuesses0 = copy.deepcopy(cylConvection.ξRetroGuesses)[:self.M,:]
+        self.ξProGuesses0 = copy.deepcopy(cylConvection.ξProGuesses)[:self.M,:]
 
         if self.γ < 0.2:
             # Solve transcendental equation for ξ with γ = 0.2. 
             # These roots will be used as starting guesses to find the roots with γ < 0.2
             
             for m in range(1,M+1):
-                fRetro = lambda ξ : cylRayleigh.ξRetroFunc(ξ,m,0.2)
-                self.ξRetroGuesses0[m-1,:] = fsolve(fRetro,cylRayleigh.ξRetroGuesses[m-1,:])
+                fRetro = lambda ξ : cylConvection.ξRetroFunc(ξ,m,0.2)
+                self.ξRetroGuesses0[m-1,:] = fsolve(fRetro,cylConvection.ξRetroGuesses[m-1,:])
 
-                fPro = lambda ξ : cylRayleigh.ξProFunc(ξ,m,0.2)
-                self.ξProGuesses0[m-1,:] = fsolve(fPro,cylRayleigh.ξProGuesses[m-1,:])
+                fPro = lambda ξ : cylConvection.ξProFunc(ξ,m,0.2)
+                self.ξProGuesses0[m-1,:] = fsolve(fPro,cylConvection.ξProGuesses[m-1,:])
 
         for m in range(1,M+1):
             # Retrograde roots
 
-            fRetro = lambda ξ : cylRayleigh.ξRetroFunc(ξ,m,self.γ)
+            fRetro = lambda ξ : cylConvection.ξRetroFunc(ξ,m,self.γ)
             fsolveResultsRetro = fsolve(fRetro,self.ξRetroGuesses0[m-1,:])
             
             # Eliminate repeated retrograde roots 
@@ -137,14 +155,14 @@ class cylRayleigh():
             if len(self.ξRetro[m-1,:]) != len(fsolveResultsRetro[retroUniqInds][:self.K]):
                 dKRetro = self.K - len(fsolveResultsRetro[retroUniqInds][:self.K])
                 msgRetro = f'Less than K unique retrograde roots at m = {m:.0f}. Decrease K by {dKRetro:.0f}, at least'
-                warnings.warn(msgRetro)
+                raise ValueError(msgRetro)
             else:
                 
                 self.ξRetro[m-1,:] = fsolveResultsRetro[retroUniqInds][:self.K]
 
             # Prograde roots
 
-            fPro = lambda ξ : cylRayleigh.ξProFunc(ξ,m,self.γ)
+            fPro = lambda ξ : cylConvection.ξProFunc(ξ,m,self.γ)
             fsolveResultsPro = fsolve(fPro,self.ξProGuesses[m-1,:])
             
             # Eliminate repeated prograde roots 
@@ -157,14 +175,11 @@ class cylRayleigh():
             if len(self.ξPro[m-1,:]) != len(fsolveResultsPro[proUniqInds][:self.K]):
                 dKPro = self.K - len(fsolveResultsPro[proUniqInds][:self.K])
                 msgPro = f'Less than K unique prograde roots at m = {m:.0f}. Decrease K by {dKPro:.0f}, at least'
-                warnings.warn(msgPro)
+                raise ValueError(msgPro)
             else:
                 self.ξPro[m-1,:] = fsolveResultsPro[proUniqInds][:self.K]
 
         # Check roots via graphical method
-        #LenξGraphical = np.zeros((2,self.M))
-        #Lenξ = np.zeros((2,self.M))
-        #ξGraphicalCheck = np.zeros((2,self.M))
 
         for mplot in range(1,self.M+1):
             # Get average distance between roots, Δξ
@@ -177,8 +192,8 @@ class cylRayleigh():
             ξProPlotarr = np.arange(self.ξPro[mplot-1,0]-0.1*ΔξProG,self.ξPro[mplot-1,-1]+0.1*ΔξProG,gridres*ΔξProG)
             
             # Assume that the function changes sign at each root and use this to graphically estimate roots
-            ξRetroPlot = cylRayleigh.ξRetroFunc(ξRetroPlotarr,mplot,self.γ)
-            ξProPlot = cylRayleigh.ξProFunc(ξProPlotarr,mplot,self.γ)
+            ξRetroPlot = cylConvection.ξRetroFunc(ξRetroPlotarr,mplot,self.γ)
+            ξProPlot = cylConvection.ξProFunc(ξProPlotarr,mplot,self.γ)
 
             ξRetroMask = np.zeros(len(ξRetroPlotarr))
             ξRetroMask[ξRetroPlot<0]=-1
@@ -197,22 +212,22 @@ class cylRayleigh():
             LenξPro = len(self.ξPro[mplot-1,:])
             
             if LenξRetroGraphical < LenξRetro:
-                warnings.warn('There may be double or spurious (retrograde) roots')
+                raise RuntimeError('There may be double or spurious (retrograde) roots')
             if LenξProGraphical < LenξPro:
-                warnings.warn('There may be double or spurious (prograde) roots')
+                raise RuntimeError('There may be double or spurious (prograde) roots')
             if LenξRetroGraphical > LenξRetro:
-                warnings.warn('Some (retrograde) roots may be missing')
+                raise RuntimeError('Some (retrograde) roots may be missing')
             if LenξProGraphical > LenξPro:
-                warnings.warn('Some (prograde) roots may be missing')
+                raise RuntimeError('Some (prograde) roots may be missing')
 
             # Compare graphical estimates to fsolve root-finding results
             ξRetroGraphicalCheck = np.sum(np.abs(ξRetroGraphical - self.ξRetro[mplot-1,:]) > 10*gridres*ΔξRetroG)
             ξProGraphicalCheck = np.sum(np.abs(ξProGraphical - self.ξPro[mplot-1,:]) > 10*gridres*ΔξProG)
 
             if ξRetroGraphicalCheck != 0:
-                warnings.warn('Some (retrograde) roots may be incorrect')
+                raise RuntimeError('Some (retrograde) roots may be incorrect')
             if ξProGraphicalCheck != 0:
-                warnings.warn('Some (prograde) roots may be incorrect')
+                raise RuntimeError('Some (prograde) roots may be incorrect')
             
         # Use the dispersion relation to compute the corresponding inviscid half-frequencies σ0
 
@@ -297,17 +312,16 @@ class cylRayleigh():
         ----------
         Zhang, K., & Liao, X. (2009). The onset of convection in rotating circular cylinders 
             with experimental boundary conditions. Journal of Fluid Mechanics, 622, 63-73. 
-            doi:10.1017/S002211200800517X
+            https://doi.org/10.1017/S002211200800517X
 
         Zhang, K., & Liao, X. (2017). Theory and Modeling of Rotating Fluids: Convection,
             Inertial Waves and Precession (Cambridge Monographs on Mechanics). Cambridge: 
-            Cambridge University Press. doi:10.1017/9781139024853
+            Cambridge University Press. https://doi.org/10.1017/9781139024853
         '''
 
         # Create grid of wavenumbers
 
         mArr = np.array([[m for k in range(1,self.K+1)] for m in range(1,self.M+1)])
-        kArr = np.array([[k for k in range(1,self.K+1)] for m in range(1,self.M+1)])
 
         # Compute R1 for every mode m,k (1 <= m <= M, 1 <= k <= K).
 
@@ -337,9 +351,9 @@ class cylRayleigh():
 
         # Check that enough modes were searched
         if m0c > (self.M-1):
-            warnings.warn('Not enough azimuthal modes were searched. Increase M.')
+            raise ValueError('Not enough azimuthal modes were searched. Increase M.')
         if k0c > (self.K-1):
-            warnings.warn('Not enough radial modes were searched. Increase K.')
+            raise ValueError('Not enough radial modes were searched. Increase K.')
 
         # Compute the corresponding viscously-corrected half-frequency
 
