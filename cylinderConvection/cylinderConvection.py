@@ -40,7 +40,7 @@ class cylConvection():
     except OSError as e:
         raise FileNotFoundError("move xiRetroGuesses.csv and xiProGuesses.csv to package directory")
 
-    def __init__(self, Γ, M, K, J):
+    def __init__(self, Γ, M, K, J, debug=False):
         '''
         Initializes cylConvection. Computes roots ξ and β for
         specified Γ, M, K, J.
@@ -64,6 +64,9 @@ class cylConvection():
             The number of passive temperature modes used to compute the 
             first-order (viscously-corrected) bulk convection solution.
             J = O(M) = O(K) is recommended.
+        debug : bool, optional
+            Sets option for errors.
+            If true, errors will be suppresssed.
 
         Notes
         -----
@@ -99,11 +102,12 @@ class cylConvection():
             Cambridge University Press. doi:10.1017/9781139024853
             
         '''
+        self.debug = debug
 
         if M > 90:
-            raise ValueError('M cannot be greater than 90.')
+            self.raiseError(ValueError,'M cannot be greater than 90.')
         if K > 90:
-            raise ValueError('K cannot be greater than 90.')
+            self.raiseError(ValueError,'K cannot be greater than 90.')
 
         self.Γ = Γ
         self.M = M
@@ -155,7 +159,7 @@ class cylConvection():
             if len(self.ξRetro[m-1,:]) != len(fsolveResultsRetro[retroUniqInds][:self.K]):
                 dKRetro = self.K - len(fsolveResultsRetro[retroUniqInds][:self.K])
                 msgRetro = f'Less than K unique retrograde roots at m = {m:.0f}. Decrease K by {dKRetro:.0f}, at least'
-                raise ValueError(msgRetro)
+                self.raiseError(ValueError,msgRetro)
             else:
                 
                 self.ξRetro[m-1,:] = fsolveResultsRetro[retroUniqInds][:self.K]
@@ -175,7 +179,7 @@ class cylConvection():
             if len(self.ξPro[m-1,:]) != len(fsolveResultsPro[proUniqInds][:self.K]):
                 dKPro = self.K - len(fsolveResultsPro[proUniqInds][:self.K])
                 msgPro = f'Less than K unique prograde roots at m = {m:.0f}. Decrease K by {dKPro:.0f}, at least'
-                raise ValueError(msgPro)
+                self.raiseError(ValueError,msgPro)
             else:
                 self.ξPro[m-1,:] = fsolveResultsPro[proUniqInds][:self.K]
 
@@ -212,22 +216,22 @@ class cylConvection():
             LenξPro = len(self.ξPro[mplot-1,:])
             
             if LenξRetroGraphical < LenξRetro:
-                raise RuntimeError('There may be double or spurious (retrograde) roots')
+                self.raiseError(RuntimeError,'There may be double or spurious (retrograde) roots')
             if LenξProGraphical < LenξPro:
-                raise RuntimeError('There may be double or spurious (prograde) roots')
+                self.raiseError(RuntimeError,'There may be double or spurious (prograde) roots')
             if LenξRetroGraphical > LenξRetro:
-                raise RuntimeError('Some (retrograde) roots may be missing')
+                self.raiseError(RuntimeError,'Some (retrograde) roots may be missing')
             if LenξProGraphical > LenξPro:
-                raise RuntimeError('Some (prograde) roots may be missing')
+                self.raiseError(RuntimeError,'Some (prograde) roots may be missing')
 
             # Compare graphical estimates to fsolve root-finding results
             ξRetroGraphicalCheck = np.sum(np.abs(ξRetroGraphical - self.ξRetro[mplot-1,:]) > 10*gridres*ΔξRetroG)
             ξProGraphicalCheck = np.sum(np.abs(ξProGraphical - self.ξPro[mplot-1,:]) > 10*gridres*ΔξProG)
 
             if ξRetroGraphicalCheck != 0:
-                raise RuntimeError('Some (retrograde) roots may be incorrect')
+                self.raiseError(RuntimeError,'Some (retrograde) roots may be incorrect')
             if ξProGraphicalCheck != 0:
-                raise RuntimeError('Some (prograde) roots may be incorrect')
+                self.raiseError(RuntimeError,'Some (prograde) roots may be incorrect')
             
         # Use the dispersion relation to compute the corresponding inviscid half-frequencies σ0
 
@@ -247,16 +251,22 @@ class cylConvection():
                 ξ**2/(np.pi**2*γ**2)))*sp.jv(m,ξ)
         return ξEqnp
     
-    def minimizeRayleigh(self, Ek, Pr, printVals=False):
+    def raiseError(self,errorClass, msg):
+        if not self.debug:
+            raise errorClass(msg)
+        else:
+            print(msg)
+    
+    def minimizeRayleigh(self, E, Pr, printVals=False):
         '''
         Minimizes modified Rayleigh number among the first M x K bulk modes
 
         Parameters
         ----------
-        Ek : float
+        E : float
             Ekman number.
             Ratio of viscous to Coriolis forces on the container scale
-            (Ek = ν/(Ω H^2))
+            (E = ν/(2 Ω H^2))
         Pr : float
             Prandtl number.
             Ratio of viscosity to thermal diffusivity
@@ -268,26 +278,34 @@ class cylConvection():
 
         Returns
         -------
+        Rac : float
+            Minimum Rayleigh number among the first M x K bulk modes.
+            (Ra = α ΔT g H^3/(ν κ))
         R1c : float
-            Minimum modified Rayleigh number among the first M x K bulk modes.
-            Defined as the Rayleigh number scaled by the Ekman number.
-            (R = Ra Ek = α ΔT g H/(Ω κ))
+            Minimum MODIFIED Rayleigh number among the first M x K bulk modes.
+            Defined as the Rayleigh number scaled by half the inverse Ekman number.
+            (R = 2 Ra E = α ΔT g H/(Ω κ))
         σ1c : float
-            Dimensionless half-frequency of the bulk mode with R = R1c,
-            scaled by the rotation rate, Ω.
+            Half-frequency of the bulk mode with R = R1c,
+            scaled by the rotational frequency 2 π/Ω.
         m0c : float
             Azimuthal wavenumber of the bulk mode with R = R1c.
         k0c : float
             Radial wavenumber of the bulk mode with R = R1c.
-        Rwall : float
-            Minimum modified Rayleigh number among sidewall-localized (viscous) convective modes. 
-            Rescaled from the asymptotic solution in a channel.
-        σwall : float
-            Dimensionless half-frequency of the wall mode with R = Rwall
-            Rescaled from the asymptotic solution in a channel.
-        mwall : float
-            Azimuthal wavenumber of the wall mode with R = Rwall
-            Rescaled from the asymptotic solution in a channel.
+        RaWall : float
+            Minimum Rayleigh number among sidewall-localized (viscous) convective modes. 
+            Obtained by rescaling the asymptotic law in a channel.
+        RWall : float
+            Minimum MODIFIED Rayleigh number among sidewall-localized (viscous) convective modes. 
+            Obtained by rescaling the asymptotic law in a channel.
+            (RWall = 2 RaWall E)
+        σWall : float
+            Half-frequency of the wall mode with R = RWall,
+            scaled by the rotational frequency 2 π/Ω.
+            Obtained by rescaling the asymptotic law in a channel.
+        mWall : float
+            Azimuthal wavenumber of the wall mode with R = RWall
+            Obtained by rescaling the asymptotic law in a channel.
 
         Notes
         -----
@@ -318,6 +336,10 @@ class cylConvection():
             Inertial Waves and Precession (Cambridge Monographs on Mechanics). Cambridge: 
             Cambridge University Press. https://doi.org/10.1017/9781139024853
         '''
+
+        # Let Ek = 2 E = ν/(Ω H^2)
+        
+        Ek = 2*E
 
         # Create grid of wavenumbers
 
@@ -351,9 +373,15 @@ class cylConvection():
 
         # Check that enough modes were searched
         if m0c > (self.M-1):
-            raise ValueError('Not enough azimuthal modes were searched. Increase M and J.')
+            if self.J < self.M:
+                self.raiseError(ValueError,'Not enough temperature modes were included. Increase J. If no improvement, increase M as well.')
+            else:
+                self.raiseError(ValueError,'Not enough azimuthal wavenumbers were searched. Increase M and J.')
         if k0c > (self.K-1):
-            raise ValueError('Not enough radial modes were searched. Increase K and J.')
+            if self.J < self.K:
+                self.raiseError(ValueError,'Not enough temperature modes were included. Increase J. If no improvement, increase K as well.')
+            else:
+                self.raiseError(ValueError,'Not enough radial wavenumbers were searched. Increase K and J.')
 
         # Compute the corresponding viscously-corrected half-frequency
 
@@ -364,17 +392,22 @@ class cylConvection():
                 σ0c**2))/(self.γ*np.sqrt(np.abs(σ0c))) - (1 + σ0c)**1.5 +
                 (1 - σ0c)**1.5)))
 
-        # Compute critical Rayleigh number, half-frequency, and azimuthal mode number for viscous (wall) convection
+        # Compute modified critical Rayleigh number, half-frequency, 
+        # and azimuthal mode number for viscous (wall) convection
 
-        Rwall = 2*np.sqrt((6*(9 + 5*np.sqrt(3)))/(5 + 3*np.sqrt(3)))*np.pi**2 + 73.8*Ek**(1/3)
-        σwall = (-290.6*Ek**(4/3))/Pr + (np.sqrt(2 + np.sqrt(3))*(3 + np.sqrt(3))*Ek*np.pi**2)/((1 + np.sqrt(3))*Pr)
-        mwall = self.γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*Ek**(1/3))
+        RWall = 2*np.sqrt((6*(9 + 5*np.sqrt(3)))/(5 + 3*np.sqrt(3)))*np.pi**2 + 73.8*Ek**(1/3)
+        σWall = (-290.6*Ek**(4/3))/Pr + (np.sqrt(2 + np.sqrt(3))*(3 + np.sqrt(3))*Ek*np.pi**2)/((1 + np.sqrt(3))*Pr)
+        mWall = self.γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*Ek**(1/3))
+
+        # Compute Rac = R1c/Ek = R1c/(2 E)
+        Rac = R1c/Ek
+        RaWall = RWall/Ek
 
         if printVals==True:
             
-            print(f"Bulk: Rc = {R1c:.4f}, σc =  {σ1c:.4f}, mc = {m0c}, nc = 1, kc = {k0c}")
-            print(f"Wall: Rc = {Rwall:.4f}, σc =  {σwall:.4f}, mc = {mwall:.4f}, nc = 1")
+            print(f"Bulk: Rac = {Rac:.4e}, σc =  {σ1c:.4f}, mc = {m0c}, nc = 1, kc = {k0c}")
+            print(f"Wall: Rac = {RaWall:.4e}, σc =  {σWall:.4f}, mc = {mWall:.4f}, nc = 1")
         
         else:
-            return R1c, σ1c, m0c, k0c, Rwall, σwall, mwall
+            return Rac, R1c, σ1c, m0c, k0c, RaWall, RWall, σWall, mWall
 
