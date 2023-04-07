@@ -133,7 +133,7 @@ class cylConvection():
         self.ξProGuesses0 = copy.deepcopy(cylConvection.ξProGuesses)[:self.M,:]
 
         if self.γ < 0.2:
-            # Solve transcendental equation for ξ with γ = 0.2. 
+            # Solve transcendental equation for ξ with γ = 0.2.
             # These roots will be used as starting guesses to find the roots with γ < 0.2
             
             for m in range(1,M+1):
@@ -257,7 +257,7 @@ class cylConvection():
         else:
             print(msg)
     
-    def minimizeRayleigh(self, E, Pr, printVals=False):
+    def minimizeRayleigh(self, E, Pr, printVals=False): 
         '''
         Minimizes modified Rayleigh number among the first M x K bulk modes
 
@@ -287,7 +287,7 @@ class cylConvection():
             (R = 2 Ra E = α ΔT g H/(Ω κ))
         σ1c : float
             Half-frequency of the bulk mode with R = R1c,
-            scaled by the rotational frequency 2 π/Ω.
+            scaled by the rotational rate Ω.
         m0c : float
             Azimuthal wavenumber of the bulk mode with R = R1c.
         k0c : float
@@ -301,7 +301,7 @@ class cylConvection():
             (RWall = 2 RaWall E)
         σWall : float
             Half-frequency of the wall mode with R = RWall,
-            scaled by the rotational frequency 2 π/Ω.
+            scaled by the rotational rate Ω.
             Obtained by rescaling the asymptotic law in a channel.
         mWall : float
             Azimuthal wavenumber of the wall mode with R = RWall
@@ -337,9 +337,12 @@ class cylConvection():
             Cambridge University Press. https://doi.org/10.1017/9781139024853
         '''
 
-        # Let Ek = 2 E = ν/(Ω H^2)
+        self.Pr = Pr
+        self.E = E
+
+        # Let self.Ek = 2 E = ν/(Ω H^2)
         
-        Ek = 2*E
+        self.Ek = 2*E
 
         # Create grid of wavenumbers
 
@@ -352,11 +355,11 @@ class cylConvection():
 
         for j in range(1,self.J+1):
             Q = (np.pi**2*self.γ**2*self.β[...,j-1]**2)/(2*(-mArr**2 + self.β[...,j-1]**2)*(-self.β[...,j-1]**2+ self.ξ**2)**2*self.σ0**2)
-            Sum += (Q*(np.pi**2 + self.β[...,j-1]**2/self.γ**2))/((4*Pr**2*self.σ0**2)/Ek**2 + (np.pi**2 + self.β[...,j-1]**2/self.γ**2)**2)
-            Sum2 += Q/((np.pi**2 + self.β[...,j-1]**2/self.γ**2)**2 + (4*Pr**2*self.σ0**2)/Ek**2)
+            Sum += (Q*(np.pi**2 + self.β[...,j-1]**2/self.γ**2))/((4*self.Pr**2*self.σ0**2)/self.Ek**2 + (np.pi**2 + self.β[...,j-1]**2/self.γ**2)**2)
+            Sum2 += Q/((np.pi**2 + self.β[...,j-1]**2/self.γ**2)**2 + (4*self.Pr**2*self.σ0**2)/self.Ek**2)
 
         with np.errstate(divide='ignore'):
-            R1 = (np.sqrt(Ek)*((np.sqrt(Ek)*np.pi**2*(np.pi**2*self.γ**2 
+            R1 = (np.sqrt(self.Ek)*((np.sqrt(self.Ek)*np.pi**2*(np.pi**2*self.γ**2 
                 + mArr*(mArr - self.σ0)))/(self.σ0**2*np.sqrt(1 - self.σ0**2)) 
                 - 2*mArr*self.σ0*(np.sqrt(1 - self.σ0) + np.sqrt(1 + self.σ0)) 
                 + (mArr**2 + np.pi**2*self.γ**2)*((1 - self.σ0)**1.5 + (1 + self.σ0)**1.5 
@@ -365,19 +368,19 @@ class cylConvection():
         # Compute minimum R1 and corresponding inviscid half-frequency and wavenumbers.
 
         c0ind = np.unravel_index(np.argmin(R1, axis=None), R1.shape)
-        σ0c = self.σ0[c0ind]
-        ξ0c = self.ξ[c0ind]
-        R1c = R1[c0ind]
-        k0c = c0ind[2]+1
-        m0c = c0ind[1]+1
+        self.σ0c = self.σ0[c0ind]
+        self.ξ0c = self.ξ[c0ind]
+        self.R1c = R1[c0ind]
+        self.k0c = c0ind[2]+1
+        self.m0c = c0ind[1]+1
 
         # Check that enough modes were searched
-        if m0c > (self.M-1):
+        if self.m0c > (self.M-1):
             if self.J < self.M:
                 self.raiseError(ValueError,'Not enough temperature modes were included. Increase J. If no improvement, increase M as well.')
             else:
                 self.raiseError(ValueError,'Not enough azimuthal wavenumbers were searched. Increase M and J.')
-        if k0c > (self.K-1):
+        if self.k0c > (self.K-1):
             if self.J < self.K:
                 self.raiseError(ValueError,'Not enough temperature modes were included. Increase J. If no improvement, increase K as well.')
             else:
@@ -385,29 +388,258 @@ class cylConvection():
 
         # Compute the corresponding viscously-corrected half-frequency
 
-        σ1c = 0.5*(2*σ0c - 1/(np.pi**2*self.γ**2 + m0c*(m0c - σ0c))*(np.sqrt(1
-                - σ0c**2)*np.sqrt(Ek))*(Sum2[c0ind]*(8*m0c**2*R1c*Pr*σ0c*np.sqrt(1 -
-                σ0c**2))/Ek**1.5 + 2*σ0c*m0c*(np.sqrt(1 + σ0c) - np.sqrt(1 -
-                σ0c)) + (m0c**2 + np.pi**2*self.γ**2)*((σ0c*np.sqrt(1 -
-                σ0c**2))/(self.γ*np.sqrt(np.abs(σ0c))) - (1 + σ0c)**1.5 +
-                (1 - σ0c)**1.5)))
+        self.σ1c = 0.5*(2*self.σ0c - 1/(np.pi**2*self.γ**2 + self.m0c*(self.m0c - self.σ0c))*(np.sqrt(1
+                - self.σ0c**2)*np.sqrt(self.Ek))*(Sum2[c0ind]*(8*self.m0c**2*self.R1c*self.Pr*self.σ0c*np.sqrt(1 -
+                self.σ0c**2))/self.Ek**1.5 + 2*self.σ0c*self.m0c*(np.sqrt(1 + self.σ0c) - np.sqrt(1 -
+                self.σ0c)) + (self.m0c**2 + np.pi**2*self.γ**2)*((self.σ0c*np.sqrt(1 -
+                self.σ0c**2))/(self.γ*np.sqrt(np.abs(self.σ0c))) - (1 + self.σ0c)**1.5 +
+                (1 - self.σ0c)**1.5)))
 
         # Compute modified critical Rayleigh number, half-frequency, 
         # and azimuthal mode number for viscous (wall) convection
 
-        RWall = 2*np.sqrt((6*(9 + 5*np.sqrt(3)))/(5 + 3*np.sqrt(3)))*np.pi**2 + 73.8*Ek**(1/3)
-        σWall = (-290.6*Ek**(4/3))/Pr + (np.sqrt(2 + np.sqrt(3))*(3 + np.sqrt(3))*Ek*np.pi**2)/((1 + np.sqrt(3))*Pr)
-        mWall = self.γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*Ek**(1/3))
+        self.RWall = 2*np.pi**2*np.sqrt(6*np.sqrt(3)) + 73.80*self.Ek**(1/3)
+        self.σWall = (-290.6*self.Ek**(4/3))/self.Pr + (np.sqrt(2 + np.sqrt(3))*(3 + np.sqrt(3))*self.Ek*np.pi**2)/((1 + np.sqrt(3))*self.Pr)
+        self.mWall = self.γ*(np.sqrt(2 + np.sqrt(3))*np.pi - 27.76*self.Ek**(1/3))
 
-        # Compute Rac = R1c/Ek = R1c/(2 E)
-        Rac = R1c/Ek
-        RaWall = RWall/Ek
+        # Compute self.Rac = self.R1c/self.Ek = self.R1c/(2 E)
+        self.Rac = self.R1c/self.Ek
+        self.RaWall = self.RWall/self.Ek
 
         if printVals==True:
             
-            print(f"Bulk: Rac = {Rac:.4e}, σc =  {σ1c:.4f}, mc = {m0c}, nc = 1, kc = {k0c}")
-            print(f"Wall: Rac = {RaWall:.4e}, σc =  {σWall:.4f}, mc = {mWall:.4f}, nc = 1")
+            print(f"Bulk: self.Rac = {self.Rac:.4e}, σc =  {self.σ1c:.4f}, mc = {self.m0c}, nc = 1, kc = {self.k0c}")
+            print(f"Wall: self.Rac = {self.RaWall:.4e}, σc =  {self.σWall:.4f}, mc = {self.mWall:.4f}, nc = 1")
         
         else:
-            return Rac, R1c, σ1c, m0c, k0c, RaWall, RWall, σWall, mWall
+            return self.Rac, self.R1c, self.σ1c, self.m0c, self.k0c, self.RaWall, self.RWall, self.σWall, self.mWall
 
+    def grid(self,ns,nφ,nz,t):
+        '''
+        Convenience function to produce 4D meshgrids of 
+        points in cylindrical radius (s), azimuth(φ),
+        height (z), and time (t) over the entire cylinder
+        at specified time(s).
+
+        Parameters
+        ----------
+        ns : int
+            Number of radial grid points on interval [0,Γ/2].
+        nφ : int
+            Number of azimuthal grid points on interval [0,2π].
+        nz : int
+            Number of vertical grid points on interval [0,1].
+        t : float, array
+            Time(s) scaled by inverse rotation rate 1/Ω.
+
+        Returns
+        -------
+        grids : dict
+            Dictionary of 4D arrays of points in cylindrical 
+            radius, azimuth, height, and time corresponding to the keys
+            's', 'phi', 'z', and 't', respectively, in addition to the
+            (converted) Cartesian positions corresponding to the keys 
+            'x' and 'y'.
+
+        Notes
+        -----
+        For each array of grid points, the axes 0, 1, 2, 3 correspond to
+        s, φ, z, t, respectively. E.g., grids['s'][-1,0,0,0] = Γ/2,
+        grids['φ'][-1,0,0,0] = 2 π,  grids['z'][0,0,-1,0] = 1. 
+        
+        '''
+
+        sarr1d = np.linspace(0,self.γ,ns)
+        sarr1d[0] = 1e-4*self.γ
+        φarr1d = np.linspace(0,2*np.pi,nφ)
+        zarr1d = np.linspace(0,1,nz)
+
+        sGrid = np.tensordot(np.tensordot(np.tensordot(sarr1d, np.ones(nφ), 0), np.ones(nz), 0), np.ones(np.size(t)), 0)
+        φGrid = np.tensordot(np.tensordot(np.tensordot(np.ones(ns), φarr1d, 0), np.ones(nz), 0), np.ones(np.size(t)), 0)
+        zGrid = np.tensordot(np.tensordot(np.tensordot(np.ones(ns), np.ones(nφ), 0), zarr1d, 0), np.ones(np.size(t)), 0)
+        tGrid = np.tensordot(np.tensordot(np.tensordot(np.ones(ns), np.ones(nφ), 0), np.ones(nz), 0), t*np.ones(np.size(t)), 0)
+
+        xGrid = sGrid * np.cos(φGrid)
+        yGrid = sGrid * np.sin(φGrid)
+
+        grids = {
+                's':sGrid, 'phi':φGrid, 'z':zGrid,
+                'x':xGrid, 'y':yGrid, 't':tGrid
+                }
+
+        return grids
+    
+    def gridData(self,ns,nφ,nz,t):
+        '''
+        Evaluates the asymptotic solution for the velocity
+        field of the onset oscillatory mode at grid points
+        of a cylindrical mesh at specified time(s).
+
+        Parameters
+        ----------
+        ns : int
+            Number of radial grid points on interval [0,Γ/2].
+        nφ : int
+            Number of azimuthal grid points on interval [0,2π].
+        nz : int
+            Number of vertical grid points on interval [0,1].
+        t : float, array
+            Time(s) scaled by inverse rotation rate 1/Ω.
+
+        Returns
+        -------
+        grids : dict
+            Dictionary of 4D arrays of points in cylindrical 
+            radius, azimuth, height, and time corresponding to the keys
+            's', 'phi', 'z', and 't', respectively; (converted) Cartesian
+            positions corresponding to the keys 'x' and 'y'; and velocity
+            grid data in cylindrical coordinates, corresponding to the keys
+            'us', 'uphi', and 'uz', respectively.  
+
+        Notes
+        -----
+        For each array of grid points, the axes 0, 1, 2, 3 correspond to
+        s, φ, z, t, respectively. E.g., grids['s'][-1,0,0,0] = Γ/2,
+        grids['φ'][-1,0,0,0] = 2 π,  grids['z'][0,0,-1,0] = 1. 
+        '''
+        
+        grids = self.grid(ns,nφ,nz,t)
+        sGrid,φGrid,zGrid,xGrid,yGrid,tGrid = grids.values()
+
+        usGrid = self.us(sGrid,φGrid,zGrid,tGrid)
+        uφGrid = self.uφ(sGrid,φGrid,zGrid,tGrid)
+        uzGrid = self.uz(sGrid,φGrid,zGrid,tGrid)
+
+        gdata = {
+                's':sGrid, 'phi':φGrid, 'z':zGrid,
+                'x':xGrid, 'y':yGrid, 't':tGrid,
+                'us':usGrid, 'uphi':uφGrid, 'uz':uzGrid
+                }
+        
+        return gdata
+    
+    def synthDoppler(self,s1,φ1,z1,s2,φ2,z2,t,gates):
+        '''
+        Generates synthetic ultrasonic Doppler velocimetry
+        (UDV) data using the asymptotic solution for the
+        critical oscillatory mode. 
+
+        Parameters
+        ----------
+        s1 : float
+            Radial position of the UDV transducer
+            scaled by the tank height.
+        φ1 : float
+            Azimuthal position of the UDV transducer
+            on interval [0,2π].
+        z1 : float
+            Vertical position of the UDV transducer
+            scaled by the tank height.
+        s2 : float
+            Radial position of the ultrasonic beam
+            path endpoint scaled by the tank height.
+        φ2 : float
+            Azimuthal position of the ultrasonic beam
+            path endpoint on interval [0,2π].
+        z2 : float
+            Vertical position of the ultrasonic beam
+            path endpoint scaled by the tank height.
+        t : float, array
+            Time(s) scaled by inverse rotation rate 1/Ω.
+        gates : int
+            Number of gates of the ultrasonic beam
+            (spatial resolution).
+
+        Returns
+        -------
+        gdataDop : dict
+            Dictionary of 2D arrays including meshgrids
+            of times, distances along the ultrasonic beam path,
+            and the component of velocity along the beam path
+            (with positive values for flow towards the transducer),
+            corresponding to the keys 't', 'l', and 'uDop', respectively.
+        beamPath : dict
+            Dictionary of 1D arrays of the Cartesian (x,y,z) coordinates
+            of all sample volumes in the ultrasonic beam path, corresponding
+            to the keys 'x', 'y', 'z', respectively.
+
+        Notes
+        -----
+        For each array of grid points, the axes 0 and 1 correspond to
+        time t and distance l along the beam path respectively.
+
+        '''
+
+        q = np.linspace(0,1,gates)
+        qGrid = np.tensordot(np.ones(np.size(t)), q, 0)
+        tGrid = np.tensordot(t*np.ones(np.size(t)), np.ones(gates), 0)
+
+        xBGrid = s1*np.cos(φ1) + qGrid*(-(s1*np.cos(φ1)) + s2*np.cos(φ2))
+        yBGrid = s1*np.sin(φ1) + qGrid*(-(s1*np.sin(φ1)) + s2*np.sin(φ2))                                                             
+        zBGrid = z1 + qGrid*(-z1 + z2)
+
+        L = np.sqrt((xBGrid[0,0]-xBGrid[0,-1])**2 + (yBGrid[0,0]-yBGrid[0,-1])**2 + (zBGrid[0,0]-zBGrid[0,-1])**2)
+        lGrid = L*qGrid
+
+        beamX = (-(s1*np.cos(φ1)) + s2*np.cos(φ2))/np.sqrt(s1**2 + s2**2 + z1**2 - 2*z1*z2 + z2**2 - 2*s1*s2*np.cos(φ1 - φ2))
+        beamY = (-(s1*np.sin(φ1)) + s2*np.sin(φ2))/np.sqrt(s1**2 + s2**2 + z1**2 - 2*z1*z2 + z2**2 - 2*s1*s2*np.cos(φ1 - φ2)) 
+        beamZ = (-z1 + z2)/np.sqrt(s1**2 + s2**2 + z1**2 - 2*z1*z2 + z2**2 - 2*s1*s2*np.cos(φ1 - φ2))
+                                                                                                                                                                                                                                                                                                                                      
+        uxBeamGrid = (xBGrid*self.us(np.sqrt(xBGrid**2 + yBGrid**2),np.arctan2(yBGrid,xBGrid),zBGrid,tGrid) 
+                  - yBGrid*self.uφ(np.sqrt(xBGrid**2 + yBGrid**2),np.arctan2(yBGrid,xBGrid),zBGrid,tGrid))/np.sqrt(xBGrid**2 + yBGrid**2)
+        uyBeamGrid = (yBGrid*self.us(np.sqrt(xBGrid**2 + yBGrid**2),np.arctan2(yBGrid,xBGrid),zBGrid,tGrid)
+                  + xBGrid*self.uφ(np.sqrt(xBGrid**2 + yBGrid**2),np.arctan2(yBGrid,xBGrid),zBGrid,tGrid))/np.sqrt(xBGrid**2 + yBGrid**2)
+        uzBeamGrid = self.uz(np.sqrt(xBGrid**2 + yBGrid**2),np.arctan2(yBGrid,xBGrid),zBGrid,tGrid)
+
+        uDopGrid = -(beamX*uxBeamGrid + beamY*uyBeamGrid + beamZ*uzBeamGrid)
+
+        gdataDop = {
+                   't':tGrid, 'l':lGrid, 'uDop':uDopGrid
+                   }
+        
+        beamPath = {
+                    'x':xBGrid[0,:], 'y':yBGrid[0,:], 'z':zBGrid[0,:]
+                    }
+        
+        return gdataDop, beamPath
+
+    def χ(self):
+        χ = np.sqrt(np.abs(self.σ0c)/self.Ek)*(1 + 1j*self.σ0c/np.abs(self.σ0c))
+        return χ
+
+    def χp(self):
+        χp = (1 + 1j)*np.sqrt((1 + self.σ0c)/self.Ek)
+        return χp
+
+    def χm(self):
+        χm = (1 - 1j)*np.sqrt((1 - self.σ0c)/self.Ek)
+        return χm
+                                
+    def us(self,s,φ,z,t):
+        stilde = self.ξ0c * s/self.γ
+        us = np.real(1j/(4.*(1 - self.σ0c**2))*(-2*((self.σ0c*self.ξ0c)/self.γ*sp.jv(self.m0c - 1,stilde) 
+            + (self.m0c*(1 - self.σ0c))/s*sp.jv(self.m0c,stilde))*np.cos(np.pi*z)
+            + ((self.ξ0c*(self.σ0c - 1))/self.γ*sp.jv(self.m0c - 1,stilde)
+            + (2*self.m0c*(1 - self.σ0c))/s*sp.jv(self.m0c,stilde))*(np.exp(-self.χp()*z) 
+            - np.exp(-self.χp()*(1 - z)))
+            + (self.ξ0c*(self.σ0c + 1))/self.γ*sp.jv(self.m0c - 1,stilde)*(np.exp(-self.χm()*z)
+            - np.exp(-self.χm()*(1 - z))))*np.exp(1j*(2*self.σ1c*t + self.m0c*φ)))
+        return us
+
+    def uφ(self,s,φ,z,t):
+        stilde = self.ξ0c * s/self.γ
+        uφ = np.real(1/(4.*(1 - self.σ0c**2))*(2*(self.ξ0c/self.γ*sp.jv(self.m0c - 1,stilde)
+            - (self.m0c*(1 - self.σ0c))/s*sp.jv(self.m0c,stilde))*np.cos(np.pi*z)
+            + (self.m0c*sp.jv(self.m0c,stilde))/(2.*self.σ0c*self.γ)*np.cos(np.pi*z)*np.exp(-self.χ()*(self.γ - s))
+            + ((self.ξ0c*(self.σ0c - 1))/self.γ*sp.jv(self.m0c - 1,stilde)
+            + (2*self.m0c*(1 - self.σ0c))/s*sp.jv(self.m0c,stilde))*(np.exp(-self.χp()*z)
+            - np.exp(-self.χp()*(1 - z)))
+            - (self.ξ0c*(self.σ0c + 1))/self.γ*sp.jv(self.m0c - 1,stilde)*(np.exp(-self.χm()*z)
+            - np.exp(-self.χm()*(1 - z))))*np.exp(1j*(2*self.σ1c*t + self.m0c*φ)))
+        return uφ
+
+    def uz(self,s,φ,z,t):
+        stilde = self.ξ0c * s/self.γ
+        uz = np.real(-(1j/(2.*self.σ0c))*(sp.jv(self.m0c,stilde)
+            - sp.jv(self.m0c,self.ξ0c)*np.exp(-self.χ()*(self.γ - s)))*np.sin(np.pi*z)*np.exp(1j*(2*self.σ1c*t + self.m0c*φ)))
+        return uz
