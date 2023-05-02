@@ -2,6 +2,7 @@ from scipy import special as sp
 from scipy.optimize import fsolve
 import numpy as np
 import os
+import sys
 import copy
 
 class cylConvection():
@@ -16,7 +17,7 @@ class cylConvection():
     and 'xiProGuesses.csv' must exist in the following file structure
     with respect to the working directory:
     
-    working directory
+    root directory
     │
     ├── cylinderConvection
     │   │
@@ -26,11 +27,19 @@ class cylConvection():
     │   |___ xiRetroGuesses.csv
     │
     └── your script
+
+    Alternatively, just set
+
+    ```
+    import sys
+    sys.path.insert(0, <root directory of cylinderConvection>)
+    ```
     
     '''
 
     # Import roots ξ for γ = 1 to use as guesses
-    pkgdir = 'cylinderConvection'
+    syspath = sys.path[0]
+    pkgdir = os.path.join(syspath,'cylinderConvection')
     pathRetro = os.path.join(pkgdir,'xiRetroGuesses.csv')
     pathPro = os.path.join(pkgdir,'xiProGuesses.csv')
     
