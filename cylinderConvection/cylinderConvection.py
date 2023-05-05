@@ -478,7 +478,7 @@ class cylConvection():
 
         return grids
     
-    def gridData(self,ns,nφ,nz,t):
+    def gridData(self,ns,nφ,nz,t,rotDir):
         '''
         Evaluates the asymptotic solution for the velocity
         field of the onset oscillatory mode at grid points
@@ -493,7 +493,10 @@ class cylConvection():
         nz : int
             Number of vertical grid points on interval [0,1].
         t : float, array
-            Time(s) scaled by inverse rotation rate 1/Ω.
+            Time(s) scaled by inverse rotation rate 1/|Ω|.
+        rotDir : float
+            Handed-ness of rotation.
+            +1 for right-handed, -1 for left-handed.
 
         Returns
         -------
@@ -513,7 +516,8 @@ class cylConvection():
         '''
         
         grids = self.grid(ns,nφ,nz,t)
-        sGrid,φGrid,zGrid,xGrid,yGrid,tGrid = grids.values()
+        sGrid,φGrid,zGrid,xGrid,yGrid,TGrid = grids.values()
+        tGrid = rotDir*TGrid
 
         usGrid = self.us(sGrid,φGrid,zGrid,tGrid)
         uφGrid = self.uφ(sGrid,φGrid,zGrid,tGrid)
@@ -521,13 +525,13 @@ class cylConvection():
 
         gdata = {
                 's':sGrid, 'phi':φGrid, 'z':zGrid,
-                'x':xGrid, 'y':yGrid, 't':tGrid,
+                'x':xGrid, 'y':yGrid, 't':TGrid,
                 'us':usGrid, 'uphi':uφGrid, 'uz':uzGrid
                 }
         
         return gdata
     
-    def synthDoppler(self,s1,φ1,z1,s2,φ2,z2,t,gates):
+    def synthDoppler(self,s1,φ1,z1,s2,φ2,z2,t,rotDir,gates):
         '''
         Generates synthetic ultrasonic Doppler velocimetry
         (UDV) data using the asymptotic solution for the
@@ -554,7 +558,10 @@ class cylConvection():
             Vertical position of the ultrasonic beam
             path endpoint scaled by the tank height.
         t : float, array
-            Time(s) scaled by inverse rotation rate 1/Ω.
+            Time(s) scaled by inverse rotation rate 1/|Ω|.
+        rotDir : float
+            Handed-ness of rotation.
+            +1 for right-handed, -1 for left-handed.
         gates : int
             Number of gates of the ultrasonic beam
             (spatial resolution).
@@ -581,7 +588,8 @@ class cylConvection():
 
         q = np.linspace(0,1,gates)
         qGrid = np.tensordot(np.ones(np.size(t)), q, 0)
-        tGrid = np.tensordot(t*np.ones(np.size(t)), np.ones(gates), 0)
+        TGrid = np.tensordot(t*np.ones(np.size(t)), np.ones(gates), 0)
+        tGrid = rotDir*TGrid
 
         xBGrid = s1*np.cos(φ1) + qGrid*(-(s1*np.cos(φ1)) + s2*np.cos(φ2))
         yBGrid = s1*np.sin(φ1) + qGrid*(-(s1*np.sin(φ1)) + s2*np.sin(φ2))                                                             
@@ -603,7 +611,7 @@ class cylConvection():
         uDopGrid = -(beamX*uxBeamGrid + beamY*uyBeamGrid + beamZ*uzBeamGrid)
 
         gdataDop = {
-                   't':tGrid, 'l':lGrid, 'uDop':uDopGrid
+                   't':TGrid, 'l':lGrid, 'uDop':uDopGrid
                    }
         
         beamPath = {
